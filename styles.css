@@ -627,6 +627,12 @@ body {
 
   .monthly-row {
     grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .monthly-total,
+  .monthly-accumulated {
+    display: block;
   }
 }
 
@@ -661,12 +667,25 @@ body {
     font-size: 0.95rem;
   }
 
+  .calendar-panel {
+    order: 1;
+  }
+
   .calendar-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .weekday {
     display: none;
+  }
+
+  .day {
+    min-height: 68px;
+    padding: 10px;
+  }
+
+  .day-status {
+    font-size: 0.65rem;
   }
 
   .input-row {
@@ -686,5 +705,19 @@ body {
     flex-direction: column;
     align-items: flex-start;
     gap: 6px;
+  }
+
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .weekly-panel {
+    order: 2;
+  }
+
+  .monthly-panel {
+    order: 3;
   }
 }

@@ -367,11 +367,11 @@ function renderMonthlyOutlook(year, monthIndex) {
 
     const total = document.createElement("span");
     total.className = "monthly-total";
-    total.textContent = currency.format(totalForMonth);
+    total.textContent = `Savings ${currency.format(totalForMonth)}`;
 
     const accumulated = document.createElement("span");
     accumulated.className = "monthly-accumulated";
-    accumulated.textContent = currency.format(runningTotal);
+    accumulated.textContent = `Balance ${currency.format(runningTotal)}`;
 
     row.appendChild(label);
     row.appendChild(days);
