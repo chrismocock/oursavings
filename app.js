@@ -185,7 +185,7 @@ function render() {
 
 function renderCalendar(year, monthIndex) {
   calendarGrid.innerHTML = "";
-  const isCompact = window.matchMedia("(max-width: 640px)").matches;
+  const isCompact = window.matchMedia("(max-width: 768px)").matches;
   calendarGrid.style.gridTemplateColumns = isCompact ? "repeat(5, minmax(0, 1fr))" : "";
 
   const weekdayLabels = isCompact ? WEEKDAYS.slice(0, 5) : WEEKDAYS;
@@ -229,7 +229,7 @@ function renderCalendar(year, monthIndex) {
 
     const statusLabel = document.createElement("span");
     statusLabel.className = "day-status";
-    statusLabel.textContent = status === "off" ? "off" : status;
+    statusLabel.textContent = getStatusLabel(status, isCompact);
 
     cell.appendChild(number);
     cell.appendChild(statusLabel);
@@ -482,6 +482,19 @@ function getNextStatus(current) {
   const index = STATUS_CYCLE.indexOf(current);
   const nextIndex = (index + 1) % STATUS_CYCLE.length;
   return STATUS_CYCLE[nextIndex];
+}
+
+function getStatusLabel(status, compact) {
+  if (!compact) {
+    return status === "off" ? "off" : status;
+  }
+  if (status === "worked") {
+    return "WORK";
+  }
+  if (status === "holiday") {
+    return "HOL";
+  }
+  return "OFF";
 }
 
 function getDayStatus(dateKey) {

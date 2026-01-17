@@ -16,6 +16,13 @@
   box-sizing: border-box;
 }
 
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
 body {
   margin: 0;
   font-family: "Optima", "Candara", "Trebuchet MS", "Segoe UI", sans-serif;
@@ -450,6 +457,10 @@ body {
 .calendar-header h2 {
   margin: 0;
   font-size: 1.5rem;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .helper {
@@ -652,7 +663,7 @@ body {
   }
 
   .metric-label {
-    letter-spacing: 0.1em;
+    letter-spacing: 0.08em;
   }
 
   .metric-value {
@@ -667,8 +678,22 @@ body {
     font-size: 0.95rem;
   }
 
+  .month-picker {
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    gap: 8px;
+  }
+
+  .month-btn {
+    height: 40px;
+    font-size: 1.2rem;
+  }
+
   .calendar-panel {
     order: 1;
+  }
+
+  .calendar-header h2 {
+    font-size: 1.25rem;
   }
 
   .calendar-grid {
@@ -686,7 +711,12 @@ body {
   }
 
   .day-status {
-    font-size: 0.65rem;
+    font-size: 0.55rem;
+    letter-spacing: 0.1em;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
   }
 
   .input-row {
@@ -695,6 +725,14 @@ body {
 
   .adjustment-row {
     grid-template-columns: 1fr;
+  }
+
+  .field input[type="number"],
+  .field input[type="month"],
+  .input-with-prefix input,
+  .spending-note,
+  .date-input {
+    font-size: 16px;
   }
 
   .add-btn,
