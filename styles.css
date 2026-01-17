@@ -552,12 +552,30 @@ body {
     grid-column: span 1;
   }
 
+  .hero-text {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .hero-controls {
+    margin-top: 0;
+  }
+
+  .hero-metrics {
+    gap: 12px;
+  }
+
   .calendar-header {
     flex-direction: column;
     align-items: flex-start;
   }
 
   .weekly-row {
+    grid-template-columns: 1fr;
+  }
+
+  .monthly-row {
     grid-template-columns: 1fr;
   }
 }
@@ -567,11 +585,33 @@ body {
     padding: 24px 16px 40px;
   }
 
+  .hero h1 {
+    font-size: clamp(1.9rem, 8vw, 2.6rem);
+  }
+
+  .lead {
+    font-size: 0.95rem;
+  }
+
   .calendar-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .weekday {
     display: none;
+  }
+
+  .input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .adjustment-row {
+    grid-template-columns: 1fr;
+  }
+
+  .spending-total {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
   }
 }
