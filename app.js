@@ -11,7 +11,6 @@ const weeklyTitle = document.getElementById("weeklyTitle");
 const weeklyList = document.getElementById("weeklyList");
 const monthlyList = document.getElementById("monthlyList");
 const savingsMonth = document.getElementById("savingsMonth");
-const billsPerDay = document.getElementById("billsPerDay");
 const summaryTitle = document.getElementById("summaryTitle");
 const savingsToDate = document.getElementById("savingsToDate");
 const spendingItem0 = document.getElementById("spendingItem0");
@@ -92,6 +91,10 @@ function init() {
     const selected = parseMonth(monthPicker.value);
     seedWorkedDaysFromJanuary(selected.year);
     saveState();
+    render();
+  });
+
+  window.addEventListener("resize", () => {
     render();
   });
 
@@ -182,8 +185,11 @@ function render() {
 
 function renderCalendar(year, monthIndex) {
   calendarGrid.innerHTML = "";
+  const isCompact = window.matchMedia("(max-width: 640px)").matches;
+  calendarGrid.style.gridTemplateColumns = isCompact ? "repeat(5, minmax(0, 1fr))" : "";
 
-  WEEKDAYS.forEach((label) => {
+  const weekdayLabels = isCompact ? WEEKDAYS.slice(0, 5) : WEEKDAYS;
+  weekdayLabels.forEach((label) => {
     const weekday = document.createElement("div");
     weekday.className = "weekday";
     weekday.textContent = label;
@@ -192,7 +198,10 @@ function renderCalendar(year, monthIndex) {
 
   const firstDay = new Date(year, monthIndex, 1);
   const totalDays = new Date(year, monthIndex + 1, 0).getDate();
-  const startOffset = getMondayIndex(firstDay);
+  let startOffset = getMondayIndex(firstDay);
+  if (isCompact && startOffset > 4) {
+    startOffset = 0;
+  }
 
   for (let i = 0; i < startOffset; i += 1) {
     const filler = document.createElement("div");
@@ -204,9 +213,14 @@ function renderCalendar(year, monthIndex) {
     const date = new Date(year, monthIndex, day);
     const dateKey = toDateKey(date);
     const status = getDayStatus(dateKey);
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+
+    if (isCompact && isWeekend) {
+      continue;
+    }
 
     const cell = document.createElement("div");
-    cell.className = `day ${status}`;
+    cell.className = `day ${status}${isWeekend ? " disabled" : ""}`;
     cell.dataset.date = dateKey;
 
     const number = document.createElement("span");
@@ -220,12 +234,14 @@ function renderCalendar(year, monthIndex) {
     cell.appendChild(number);
     cell.appendChild(statusLabel);
 
-    cell.addEventListener("click", () => {
-      const nextStatus = getNextStatus(getDayStatus(dateKey));
-      state.days[dateKey] = nextStatus;
-      saveState();
-      render();
-    });
+    if (!isWeekend) {
+      cell.addEventListener("click", () => {
+        const nextStatus = getNextStatus(getDayStatus(dateKey));
+        state.days[dateKey] = nextStatus;
+        saveState();
+        render();
+      });
+    }
 
     calendarGrid.appendChild(cell);
   }
@@ -316,7 +332,6 @@ function renderSummaries(year, monthIndex) {
   const monthStats = computeMonthStats(year, monthIndex, weekCount);
 
   savingsMonth.textContent = currency.format(monthStats.savings);
-  billsPerDay.textContent = currency.format(monthStats.billsPerWeek);
   const totalSavings = computeAdjustedSavingsToDate(year, monthIndex);
   const deductions = getTotalDeductions();
   const netSavings = totalSavings - deductions;
