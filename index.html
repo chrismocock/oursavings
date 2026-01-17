@@ -1,0 +1,134 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Income Tracker</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <div class="hero-text">
+          <p class="eyebrow">Day-Rate Income Tracker</p>
+          <h1>See your savings totals and bills cover at a glance.</h1>
+          <p class="lead">
+            Mark each day as worked or holiday, and the app rolls up weekly totals and
+            your monthly savings goals.
+          </p>
+          <section class="panel controls hero-controls">
+            <div class="field">
+              <label for="monthPicker">Month</label>
+              <input type="month" id="monthPicker" />
+            </div>
+            <div class="field">
+              <label for="monthlyBills">Monthly mandatory bills</label>
+              <div class="input-with-prefix">
+                <span>GBP</span>
+                <input type="number" id="monthlyBills" min="0" step="50" />
+              </div>
+            </div>
+            <div class="field toggle">
+              <label for="holidayPaid">Holiday is paid</label>
+              <input type="checkbox" id="holidayPaid" />
+            </div>
+            <div class="legend">
+              <div class="legend-item">
+                <span class="chip worked"></span>
+                Worked day
+              </div>
+              <div class="legend-item">
+                <span class="chip holiday"></span>
+                Holiday
+              </div>
+              <div class="legend-item">
+                <span class="chip off"></span>
+                Off / no entry
+              </div>
+            </div>
+          </section>
+        </div>
+        <div class="hero-metrics" id="heroMetrics">
+          <h2 class="summary-title" id="summaryTitle">Summary</h2>
+          <div class="metric">
+            <span class="metric-label">Savings pot (selected month)</span>
+            <span class="metric-value" id="savingsMonth">GBP 0</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Bills per week target</span>
+            <span class="metric-value" id="billsPerDay">GBP 0</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Cumulated savings so far</span>
+            <span class="metric-value" id="savingsToDate">GBP 0</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Spending to deduct</span>
+            <div class="input-row">
+              <div class="input-with-prefix">
+                <span>£</span>
+                <input type="text" id="spendingItem0" inputmode="numeric" />
+              </div>
+              <input
+                class="spending-note"
+                id="spendingNote0"
+                type="text"
+                placeholder="What for?"
+              />
+              <button class="add-btn" id="addSpending" type="button">+</button>
+              <button class="remove-btn" id="removeSpending0" type="button">×</button>
+            </div>
+            <div class="spending-list" id="spendingList"></div>
+            <div class="spending-total">
+              <span>Total deductions</span>
+              <strong id="spendingTotal">£0</strong>
+            </div>
+          </div>
+          <div class="metric warning">
+            <span class="metric-label">Balance adjustments</span>
+            <p class="warning-text">Warning: this will adjust the forecast.</p>
+            <div class="adjustment-row">
+              <input class="date-input" type="date" id="adjustmentDate0" />
+              <div class="input-with-prefix">
+                <span>£</span>
+                <input type="text" id="adjustmentAmount0" inputmode="numeric" />
+              </div>
+              <button class="add-btn" id="addAdjustment" type="button">+</button>
+              <button class="remove-btn" id="removeAdjustment0" type="button">×</button>
+            </div>
+            <div class="adjustment-list" id="adjustmentList"></div>
+            <div class="spending-total">
+              <span>Latest balance set</span>
+              <strong id="adjustmentTotal">£0</strong>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="panel calendar-panel">
+          <div class="calendar-header">
+            <h2 id="calendarTitle">Month</h2>
+            <p class="helper">Click a day to cycle: off -> worked -> holiday.</p>
+          </div>
+          <div class="calendar-grid" id="calendarGrid"></div>
+        </section>
+
+        <section class="panel weekly-panel">
+          <h2 id="weeklyTitle">Weekly totals</h2>
+          <div class="weekly-list" id="weeklyList"></div>
+        </section>
+
+        <section class="panel monthly-panel">
+          <h2>Monthly Outlook (income is based on previous month days worked)</h2>
+          <p class="helper">Previous 3 months and 12-month forecast.</p>
+          <div class="monthly-list" id="monthlyList"></div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="version">Version 3</footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
