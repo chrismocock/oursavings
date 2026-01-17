@@ -1,5 +1,11 @@
 ﻿const STORAGE_KEY = "income-tracker-state";
 
+const SUPABASE_URL = "https://nbnprbrjoacripodygru.supabase.co";
+const SUPABASE_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ibnByYnJqb2Fjcmlwb2R5Z3J1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2NzUyOTUsImV4cCI6MjA4NDI1MTI5NX0.TV9un-JTUbh9JJwg3R0j5i8Cqc4jV-xxVOkZEEPk370";
+const SUPABASE_TABLE = "savings_state";
+const SUPABASE_ROW_ID = "shared";
+
 const monthPicker = document.getElementById("monthPicker");
 const prevMonth = document.getElementById("prevMonth");
 const nextMonth = document.getElementById("nextMonth");
@@ -13,6 +19,7 @@ const monthlyList = document.getElementById("monthlyList");
 const savingsMonth = document.getElementById("savingsMonth");
 const summaryTitle = document.getElementById("summaryTitle");
 const savingsToDate = document.getElementById("savingsToDate");
+const lastSync = document.getElementById("lastSync");
 const spendingItem0 = document.getElementById("spendingItem0");
 const spendingNote0 = document.getElementById("spendingNote0");
 const addSpending = document.getElementById("addSpending");
@@ -68,6 +75,10 @@ const BANK_HOLIDAYS = new Set([
 ]);
 
 const state = loadState();
+const supabaseClient = createSupabaseClient();
+const syncRemoteState = debounce(saveRemoteState, 800);
+let isApplyingRemote = false;
+let lastSyncTime = null;
 
 init();
 
@@ -76,15 +87,7 @@ function init() {
   const monthValue = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
   monthPicker.value = state.selectedMonth || monthValue;
-  monthlyBillsInput.value = state.monthlyBills ?? 3000;
-  holidayPaidToggle.checked = Boolean(state.holidayPaid);
-  ensureSpendingItems();
-  renderSpendingInputs();
-  ensureAdjustments();
-  renderAdjustmentInputs();
-
-  const { year } = parseMonth(monthPicker.value);
-  seedWorkedDaysFromJanuary(year);
+  refreshFromState();
 
   monthPicker.addEventListener("change", () => {
     state.selectedMonth = monthPicker.value;
@@ -157,6 +160,16 @@ function init() {
   });
 
   render();
+  loadRemoteState().then(() => {
+    refreshFromState();
+    render();
+  });
+
+  setInterval(() => {
+    if (lastSyncTime) {
+      updateLastSync(lastSyncTime);
+    }
+  }, 10000);
 }
 
 function render() {
@@ -621,6 +634,125 @@ function loadState() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (!isApplyingRemote) {
+    syncRemoteState();
+  }
+}
+
+function refreshFromState() {
+  monthlyBillsInput.value = state.monthlyBills ?? 3000;
+  holidayPaidToggle.checked = Boolean(state.holidayPaid);
+  if (state.selectedMonth) {
+    monthPicker.value = state.selectedMonth;
+  }
+  ensureSpendingItems();
+  renderSpendingInputs();
+  ensureAdjustments();
+  renderAdjustmentInputs();
+  const { year } = parseMonth(monthPicker.value);
+  seedWorkedDaysFromJanuary(year);
+}
+
+function createSupabaseClient() {
+  if (!window.supabase) {
+    return null;
+  }
+  return window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
+
+async function loadRemoteState() {
+  if (!supabaseClient) {
+    return;
+  }
+  try {
+    const { data, error } = await supabaseClient
+      .from(SUPABASE_TABLE)
+      .select("data")
+      .eq("id", SUPABASE_ROW_ID)
+      .single();
+    if (error || !data?.data) {
+      updateLastSync("Not synced");
+      return;
+    }
+    isApplyingRemote = true;
+    applyRemoteState(data.data);
+    saveState();
+    isApplyingRemote = false;
+    updateLastSync(new Date());
+  } catch (error) {
+    console.warn("Supabase load failed", error);
+    updateLastSync("Sync failed");
+  }
+}
+
+async function saveRemoteState() {
+  if (!supabaseClient) {
+    return;
+  }
+  try {
+    const payload = {
+      id: SUPABASE_ROW_ID,
+      data: { ...state },
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabaseClient
+      .from(SUPABASE_TABLE)
+      .upsert(payload, { onConflict: "id" });
+    if (error) {
+      updateLastSync("Sync failed");
+      return;
+    }
+    updateLastSync(new Date());
+  } catch (error) {
+    console.warn("Supabase save failed", error);
+    updateLastSync("Sync failed");
+  }
+}
+
+function applyRemoteState(remote) {
+  const defaults = loadState();
+  Object.keys(defaults).forEach((key) => {
+    state[key] = remote[key] ?? defaults[key];
+  });
+}
+
+function debounce(fn, delayMs) {
+  let timer = null;
+  return (...args) => {
+    if (timer) {
+      clearTimeout(timer);
+    }
+    timer = setTimeout(() => fn(...args), delayMs);
+  };
+}
+
+function updateLastSync(value) {
+  if (!lastSync) {
+    return;
+  }
+  if (value instanceof Date) {
+    lastSyncTime = value;
+    lastSync.textContent = `Synced ${formatRelativeTime(value)}`;
+    return;
+  }
+  lastSync.textContent = value;
+}
+
+function formatRelativeTime(date) {
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 30000) {
+    return "just now";
+  }
+  const diffMinutes = Math.round(diffMs / 60000);
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`;
+  }
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  }
+  const diffDays = Math.round(diffHours / 24);
+  return `${diffDays}d ago`;
 }
 
 function parseNumber(value) {

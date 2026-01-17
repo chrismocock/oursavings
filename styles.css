@@ -51,6 +51,23 @@ body {
   margin-bottom: 24px;
 }
 
+.sync-status {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+
+.sync-status strong {
+  color: var(--ink);
+  letter-spacing: 0.05em;
+}
+
 .toast {
   position: fixed;
   left: 50%;
