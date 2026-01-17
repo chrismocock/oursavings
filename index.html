@@ -20,7 +20,15 @@
           <section class="panel controls hero-controls">
             <div class="field">
               <label for="monthPicker">Month</label>
-              <input type="month" id="monthPicker" />
+              <div class="month-picker">
+                <button class="month-btn" id="prevMonth" type="button" aria-label="Previous month">
+                  ‹
+                </button>
+                <input type="month" id="monthPicker" />
+                <button class="month-btn" id="nextMonth" type="button" aria-label="Next month">
+                  ›
+                </button>
+              </div>
             </div>
             <div class="field">
               <label for="monthlyBills">Monthly mandatory bills</label>
@@ -129,6 +137,7 @@
     </div>
 
     <footer class="version">Version 3</footer>
+    <div class="toast" id="spendingToast" role="status" aria-live="polite"></div>
 
     <script src="app.js"></script>
   </body>

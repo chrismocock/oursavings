@@ -44,6 +44,29 @@ body {
   margin-bottom: 24px;
 }
 
+.toast {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.98);
+  background: rgba(27, 26, 23, 0.92);
+  color: #fff;
+  padding: 22px 28px;
+  border-radius: 18px;
+  font-size: 1.2rem;
+  letter-spacing: 0.06em;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+  box-shadow: 0 18px 40px rgba(27, 26, 23, 0.3);
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
@@ -313,6 +336,33 @@ body {
   font-size: 1rem;
   background: #fffdf9;
   font-family: inherit;
+}
+
+.month-picker {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  gap: 10px;
+  align-items: center;
+}
+
+.month-picker input[type="month"] {
+  width: 100%;
+  text-align: center;
+  padding: 14px 16px;
+}
+
+.month-btn {
+  border: none;
+  border-radius: 12px;
+  background: rgba(63, 122, 122, 0.12);
+  color: var(--ink);
+  font-size: 1.4rem;
+  height: 44px;
+  cursor: pointer;
+}
+
+.month-btn:hover {
+  background: rgba(63, 122, 122, 0.22);
 }
 
 .input-with-prefix {
@@ -585,6 +635,24 @@ body {
     padding: 24px 16px 40px;
   }
 
+  .panel {
+    padding: 18px;
+    border-radius: 18px;
+  }
+
+  .metric {
+    padding: 14px 16px;
+    border-radius: 16px;
+  }
+
+  .metric-label {
+    letter-spacing: 0.1em;
+  }
+
+  .metric-value {
+    font-size: 1.4rem;
+  }
+
   .hero h1 {
     font-size: clamp(1.9rem, 8vw, 2.6rem);
   }
@@ -607,6 +675,11 @@ body {
 
   .adjustment-row {
     grid-template-columns: 1fr;
+  }
+
+  .add-btn,
+  .remove-btn {
+    width: 100%;
   }
 
   .spending-total {

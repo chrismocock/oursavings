@@ -1,6 +1,8 @@
 ﻿const STORAGE_KEY = "income-tracker-state";
 
 const monthPicker = document.getElementById("monthPicker");
+const prevMonth = document.getElementById("prevMonth");
+const nextMonth = document.getElementById("nextMonth");
 const monthlyBillsInput = document.getElementById("monthlyBills");
 const holidayPaidToggle = document.getElementById("holidayPaid");
 const calendarGrid = document.getElementById("calendarGrid");
@@ -18,6 +20,7 @@ const addSpending = document.getElementById("addSpending");
 const removeSpending0 = document.getElementById("removeSpending0");
 const spendingList = document.getElementById("spendingList");
 const spendingTotal = document.getElementById("spendingTotal");
+const spendingToast = document.getElementById("spendingToast");
 const adjustmentDate0 = document.getElementById("adjustmentDate0");
 const adjustmentAmount0 = document.getElementById("adjustmentAmount0");
 const addAdjustment = document.getElementById("addAdjustment");
@@ -88,6 +91,26 @@ function init() {
     state.selectedMonth = monthPicker.value;
     const selected = parseMonth(monthPicker.value);
     seedWorkedDaysFromJanuary(selected.year);
+    saveState();
+    render();
+  });
+
+  prevMonth.addEventListener("click", () => {
+    const { year, monthIndex } = parseMonth(monthPicker.value);
+    const target = shiftMonth(year, monthIndex, -1);
+    monthPicker.value = formatMonthValue(target.year, target.monthIndex);
+    state.selectedMonth = monthPicker.value;
+    seedWorkedDaysFromJanuary(target.year);
+    saveState();
+    render();
+  });
+
+  nextMonth.addEventListener("click", () => {
+    const { year, monthIndex } = parseMonth(monthPicker.value);
+    const target = shiftMonth(year, monthIndex, 1);
+    monthPicker.value = formatMonthValue(target.year, target.monthIndex);
+    state.selectedMonth = monthPicker.value;
+    seedWorkedDaysFromJanuary(target.year);
     saveState();
     render();
   });
@@ -500,6 +523,10 @@ function shiftMonth(year, monthIndex, offset) {
   };
 }
 
+function formatMonthValue(year, monthIndex) {
+  return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+}
+
 function countRecordedDays(year, monthIndex) {
   const totalDays = new Date(year, monthIndex + 1, 0).getDate();
   let recorded = 0;
@@ -608,6 +635,9 @@ function renderSpendingInputs() {
     const selected = parseMonth(monthPicker.value);
     renderSummaries(selected.year, selected.monthIndex);
   };
+  spendingItem0.onchange = () => {
+    showSpendingAlert();
+  };
   spendingNote0.value = state.spendingItems[0]?.note || "";
   spendingNote0.oninput = () => {
     state.spendingItems[0].note = spendingNote0.value;
@@ -636,6 +666,9 @@ function renderSpendingInputs() {
       saveState();
       const selected = parseMonth(monthPicker.value);
       renderSummaries(selected.year, selected.monthIndex);
+    };
+    input.onchange = () => {
+      showSpendingAlert();
     };
 
     const note = document.createElement("input");
@@ -680,6 +713,18 @@ function removeSpendingAtIndex(index) {
   renderSpendingInputs();
   const selected = parseMonth(monthPicker.value);
   renderSummaries(selected.year, selected.monthIndex);
+}
+
+function showSpendingAlert() {
+  if (!spendingToast) {
+    return;
+  }
+  spendingToast.textContent = "WTF Hols!! spending again";
+  spendingToast.classList.add("show");
+  clearTimeout(spendingToast.dismissTimer);
+  spendingToast.dismissTimer = setTimeout(() => {
+    spendingToast.classList.remove("show");
+  }, 2200);
 }
 
 function ensureAdjustments() {
