@@ -136,7 +136,7 @@ body {
 
 .input-row {
   display: grid;
-  grid-template-columns: 100px minmax(0, 1fr) auto auto;
+  grid-template-columns: 100px 140px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
 }

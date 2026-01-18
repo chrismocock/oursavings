@@ -21,6 +21,7 @@ const summaryTitle = document.getElementById("summaryTitle");
 const savingsToDate = document.getElementById("savingsToDate");
 const lastSync = document.getElementById("lastSync");
 const spendingItem0 = document.getElementById("spendingItem0");
+const spendingDate0 = document.getElementById("spendingDate0");
 const spendingNote0 = document.getElementById("spendingNote0");
 const addSpending = document.getElementById("addSpending");
 const removeSpending0 = document.getElementById("removeSpending0");
@@ -135,7 +136,7 @@ function init() {
   });
 
   addSpending.addEventListener("click", () => {
-    state.spendingItems.push({ amount: 0, note: "" });
+    state.spendingItems.push({ amount: 0, note: "", date: getDefaultSpendingDate() });
     saveState();
     renderSpendingInputs();
     const selected = parseMonth(monthPicker.value);
@@ -267,8 +268,8 @@ function renderWeeklyTotals(year, monthIndex) {
   weeklyList.innerHTML = "";
 
   weeks.forEach((week) => {
-    const holidayDeduction = monthStats.billsPerDay * week.holidayDays;
-    const netSavings = week.savings - holidayDeduction;
+    const missedDays = Math.max(0, week.expectedDays - week.workedDays);
+    const netSavings = week.savings - monthStats.billsPerDay * missedDays;
 
     const row = document.createElement("div");
     row.className = "weekly-row";
@@ -343,13 +344,12 @@ function renderWeeklyTotals(year, monthIndex) {
 function renderSummaries(year, monthIndex) {
   const weekCount = buildWeeks(year, monthIndex).length;
   const monthStats = computeMonthStats(year, monthIndex, weekCount);
+  const monthDeductions = getDeductionsForMonth(year, monthIndex);
 
-  savingsMonth.textContent = currency.format(monthStats.savings);
+  savingsMonth.textContent = currency.format(monthStats.netSavings - monthDeductions);
   const totalSavings = computeAdjustedSavingsToDate(year, monthIndex);
-  const deductions = getTotalDeductions();
-  const netSavings = totalSavings - deductions;
-  savingsToDate.textContent = currency.format(netSavings);
-  spendingTotal.textContent = currency.format(deductions);
+  savingsToDate.textContent = currency.format(totalSavings);
+  spendingTotal.textContent = currency.format(monthDeductions);
   adjustmentTotal.textContent = currency.format(getLatestAdjustmentAmount());
 }
 
@@ -377,9 +377,16 @@ function renderMonthlyOutlook(year, monthIndex) {
     const expectedDays = expectedWorkedDays(prevMonth.year, prevMonth.monthIndex);
     const workedDays = useForecast && recordedDays === 0 ? expectedDays : prevStats.workedDays;
     const savings = workedDays * (state.savingsPerDay || 0);
-    runningTotal += savings;
+    const billsPerDay = expectedDays ? (state.monthlyBills || 0) / expectedDays : 0;
+    const missedDays = Math.max(0, expectedDays - workedDays);
+    const netForMonth = savings - billsPerDay * missedDays;
+    const deductions = getDeductionsForMonth(month.year, month.monthIndex);
+    runningTotal += netForMonth;
     runningTotal = applyAdjustmentForMonth(runningTotal, month.year, month.monthIndex);
-    const totalForMonth = savings;
+    if (deductions) {
+      runningTotal -= deductions;
+    }
+    const totalForMonth = netForMonth;
 
     const row = document.createElement("div");
     row.className = "monthly-row";
@@ -432,10 +439,16 @@ function buildWeeks(year, monthIndex) {
         paidDays: 0,
         workedDays: 0,
         holidayDays: 0,
+        expectedDays: 0,
       };
     }
 
     const status = getDayStatus(toDateKey(date));
+    const dayOfWeek = date.getDay();
+    const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+    if (isWeekday) {
+      currentWeek.expectedDays += 1;
+    }
     if (status === "worked") {
       currentWeek.paidDays += 1;
       currentWeek.workedDays += 1;
@@ -477,17 +490,21 @@ function computeMonthStats(year, monthIndex, weekCount) {
     }
   }
 
-  const billsPerDay = workedDays ? (state.monthlyBills || 0) / workedDays : 0;
+  const expectedDays = expectedWorkedDays(year, monthIndex);
+  const billsPerDay = expectedDays ? (state.monthlyBills || 0) / expectedDays : 0;
+  const missedDays = Math.max(0, expectedDays - workedDays);
   const savings = workedDays * (state.savingsPerDay || 0);
 
   return {
     paidDays,
     workedDays,
     holidayDays,
+    expectedDays,
+    missedDays,
     savings,
     billsPerWeek: safeWeekCount ? (state.monthlyBills || 0) / safeWeekCount : 0,
     billsPerDay,
-    netSavings: savings - billsPerDay * holidayDays,
+    netSavings: savings - billsPerDay * missedDays,
   };
 }
 
@@ -568,6 +585,16 @@ function formatMonthValue(year, monthIndex) {
   return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
 }
 
+function getDefaultSpendingDate() {
+  const fallback = new Date();
+  const monthValue = monthPicker?.value;
+  if (!monthValue) {
+    return `${fallback.getFullYear()}-${String(fallback.getMonth() + 1).padStart(2, "0")}-01`;
+  }
+  const { year, monthIndex } = parseMonth(monthValue);
+  return `${year}-${String(monthIndex + 1).padStart(2, "0")}-01`;
+}
+
 function countRecordedDays(year, monthIndex) {
   const totalDays = new Date(year, monthIndex + 1, 0).getDate();
   let recorded = 0;
@@ -595,10 +622,9 @@ function expectedWorkedDays(year, monthIndex) {
   let worked = 0;
   for (let day = 1; day <= totalDays; day += 1) {
     const date = new Date(year, monthIndex, day);
-    const dateKey = toDateKey(date);
     const dayOfWeek = date.getDay();
     const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
-    if (isWeekday && !BANK_HOLIDAYS.has(dateKey)) {
+    if (isWeekday) {
       worked += 1;
     }
   }
@@ -768,20 +794,34 @@ function formatNumber(value) {
 }
 
 function ensureSpendingItems() {
+  const defaultDate = getDefaultSpendingDate();
   if (Array.isArray(state.spendingItems) && state.spendingItems.length) {
-    const needsNormalize = state.spendingItems.some((item) => typeof item === "number");
+    const needsNormalize = state.spendingItems.some(
+      (item) => typeof item === "number" || !item || !item.date
+    );
     if (!needsNormalize) {
       return;
     }
-    state.spendingItems = state.spendingItems.map((item) =>
-      typeof item === "number" ? { amount: item, note: "" } : item
-    );
+    state.spendingItems = state.spendingItems.map((item) => normalizeSpendingItem(item, defaultDate));
     saveState();
     return;
   }
   const legacyValue = Number(state.spendingToDate || 0);
-  state.spendingItems = [{ amount: legacyValue, note: "" }];
+  state.spendingItems = [{ amount: legacyValue, note: "", date: defaultDate }];
   saveState();
+}
+
+function normalizeSpendingItem(item, defaultDate) {
+  if (typeof item === "number") {
+    return { amount: item, note: "", date: defaultDate };
+  }
+  const safeAmount = Number(item?.amount) || 0;
+  const safeNote = item?.note || "";
+  const candidateDate = item?.date;
+  const parsed = candidateDate ? new Date(candidateDate) : null;
+  const safeDate =
+    parsed && !Number.isNaN(parsed.getTime()) ? candidateDate : defaultDate;
+  return { amount: safeAmount, note: safeNote, date: safeDate };
 }
 
 function renderSpendingInputs() {
@@ -794,9 +834,18 @@ function renderSpendingInputs() {
     saveState();
     const selected = parseMonth(monthPicker.value);
     renderSummaries(selected.year, selected.monthIndex);
+    renderMonthlyOutlook(selected.year, selected.monthIndex);
   };
   spendingItem0.onchange = () => {
     showSpendingAlert();
+  };
+  spendingDate0.value = state.spendingItems[0]?.date || getDefaultSpendingDate();
+  spendingDate0.oninput = () => {
+    state.spendingItems[0].date = spendingDate0.value;
+    saveState();
+    const selected = parseMonth(monthPicker.value);
+    renderSummaries(selected.year, selected.monthIndex);
+    renderMonthlyOutlook(selected.year, selected.monthIndex);
   };
   spendingNote0.value = state.spendingItems[0]?.note || "";
   spendingNote0.oninput = () => {
@@ -826,6 +875,7 @@ function renderSpendingInputs() {
       saveState();
       const selected = parseMonth(monthPicker.value);
       renderSummaries(selected.year, selected.monthIndex);
+      renderMonthlyOutlook(selected.year, selected.monthIndex);
     };
     input.onchange = () => {
       showSpendingAlert();
@@ -841,9 +891,22 @@ function renderSpendingInputs() {
       saveState();
     };
 
+    const date = document.createElement("input");
+    date.type = "date";
+    date.className = "date-input";
+    date.value = item?.date || getDefaultSpendingDate();
+    date.oninput = () => {
+      state.spendingItems[index + 1].date = date.value;
+      saveState();
+      const selected = parseMonth(monthPicker.value);
+      renderSummaries(selected.year, selected.monthIndex);
+      renderMonthlyOutlook(selected.year, selected.monthIndex);
+    };
+
     wrapper.appendChild(prefix);
     wrapper.appendChild(input);
     row.appendChild(wrapper);
+    row.appendChild(date);
     row.appendChild(note);
 
     const remove = document.createElement("button");
@@ -857,9 +920,21 @@ function renderSpendingInputs() {
   });
 }
 
-function getTotalDeductions() {
+function getDeductionsForMonth(year, monthIndex) {
   ensureSpendingItems();
-  return state.spendingItems.reduce((sum, item) => sum + (Number(item?.amount) || 0), 0);
+  return state.spendingItems.reduce((sum, item) => {
+    if (!item?.date) {
+      return sum;
+    }
+    const date = new Date(item.date);
+    if (Number.isNaN(date.getTime())) {
+      return sum;
+    }
+    if (date.getFullYear() === year && date.getMonth() === monthIndex) {
+      return sum + (Number(item.amount) || 0);
+    }
+    return sum;
+  }, 0);
 }
 
 function removeSpendingAtIndex(index) {
@@ -1021,8 +1096,9 @@ function computeAdjustedSavingsToDate(year, monthIndex) {
   let total = 0;
   for (let i = 0; i <= monthIndex; i += 1) {
     const stats = computeMonthStats(year, i, null);
-    total += stats.savings;
+    total += stats.netSavings;
     total = applyAdjustmentForMonth(total, year, i);
+    total -= getDeductionsForMonth(year, i);
   }
   return total;
 }

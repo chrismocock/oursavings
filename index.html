@@ -1,4 +1,4 @@
-ï»¿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -22,11 +22,11 @@
               <label for="monthPicker">Month</label>
               <div class="month-picker">
                 <button class="month-btn" id="prevMonth" type="button" aria-label="Previous month">
-                  â€¹
+                  ‹
                 </button>
                 <input type="month" id="monthPicker" />
                 <button class="month-btn" id="nextMonth" type="button" aria-label="Next month">
-                  â€º
+                  ›
                 </button>
               </div>
             </div>
@@ -71,9 +71,10 @@
             <span class="metric-label">Spending to deduct</span>
             <div class="input-row">
               <div class="input-with-prefix">
-                <span>Â£</span>
+                <span>£</span>
                 <input type="text" id="spendingItem0" inputmode="numeric" />
               </div>
+              <input class="date-input" type="date" id="spendingDate0" />
               <input
                 class="spending-note"
                 id="spendingNote0"
@@ -81,12 +82,12 @@
                 placeholder="What for?"
               />
               <button class="add-btn" id="addSpending" type="button">+</button>
-              <button class="remove-btn" id="removeSpending0" type="button">Ã—</button>
+              <button class="remove-btn" id="removeSpending0" type="button">×</button>
             </div>
             <div class="spending-list" id="spendingList"></div>
             <div class="spending-total">
-              <span>Total deductions</span>
-              <strong id="spendingTotal">Â£0</strong>
+              <span>Total deductions this month</span>
+              <strong id="spendingTotal">£0</strong>
             </div>
           </div>
           <div class="metric warning">
@@ -95,16 +96,16 @@
             <div class="adjustment-row">
               <input class="date-input" type="date" id="adjustmentDate0" />
               <div class="input-with-prefix">
-                <span>Â£</span>
+                <span>£</span>
                 <input type="text" id="adjustmentAmount0" inputmode="numeric" />
               </div>
               <button class="add-btn" id="addAdjustment" type="button">+</button>
-              <button class="remove-btn" id="removeAdjustment0" type="button">Ã—</button>
+              <button class="remove-btn" id="removeAdjustment0" type="button">×</button>
             </div>
             <div class="adjustment-list" id="adjustmentList"></div>
             <div class="spending-total">
               <span>Latest balance set</span>
-              <strong id="adjustmentTotal">Â£0</strong>
+              <strong id="adjustmentTotal">£0</strong>
             </div>
           </div>
         </div>
@@ -143,3 +144,6 @@
     <script src="app.js"></script>
   </body>
 </html>
+
+
+
