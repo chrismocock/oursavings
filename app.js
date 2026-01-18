@@ -19,6 +19,9 @@ const monthlyList = document.getElementById("monthlyList");
 const savingsMonth = document.getElementById("savingsMonth");
 const summaryTitle = document.getElementById("summaryTitle");
 const savingsToDate = document.getElementById("savingsToDate");
+const owedTotal = document.getElementById("owedTotal");
+const owedLabel = document.getElementById("owedLabel");
+const owedWeeks = document.getElementById("owedWeeks");
 const lastSync = document.getElementById("lastSync");
 const spendingItem0 = document.getElementById("spendingItem0");
 const spendingDate0 = document.getElementById("spendingDate0");
@@ -74,6 +77,9 @@ const BANK_HOLIDAYS = new Set([
   "2027-12-27",
   "2027-12-28",
 ]);
+
+const UNPAID_CUTOFF_DATE = new Date(2025, 10, 1);
+const PAY_ARREARS_MONTHS = 1;
 
 const state = loadState();
 const supabaseClient = createSupabaseClient();
@@ -195,6 +201,7 @@ function render() {
   renderWeeklyTotals(year, monthIndex);
   renderMonthlyOutlook(year, monthIndex);
   renderSummaries(year, monthIndex);
+  renderOwedSummary();
 }
 
 function renderCalendar(year, monthIndex) {
@@ -226,6 +233,7 @@ function renderCalendar(year, monthIndex) {
   for (let day = 1; day <= totalDays; day += 1) {
     const date = new Date(year, monthIndex, day);
     const dateKey = toDateKey(date);
+    const isBankHoliday = isBankHolidayDate(dateKey);
     const status = getDayStatus(dateKey);
     const isWeekend = date.getDay() === 0 || date.getDay() === 6;
 
@@ -234,7 +242,8 @@ function renderCalendar(year, monthIndex) {
     }
 
     const cell = document.createElement("div");
-    cell.className = `day ${status}${isWeekend ? " disabled" : ""}`;
+    const isLocked = isWeekend || isBankHoliday;
+    cell.className = `day ${status}${isWeekend ? " disabled" : ""}${isBankHoliday ? " bank locked" : ""}`;
     cell.dataset.date = dateKey;
 
     const number = document.createElement("span");
@@ -243,12 +252,12 @@ function renderCalendar(year, monthIndex) {
 
     const statusLabel = document.createElement("span");
     statusLabel.className = "day-status";
-    statusLabel.textContent = getStatusLabel(status, isCompact);
+    statusLabel.textContent = getStatusLabel(status, isCompact, isBankHoliday);
 
     cell.appendChild(number);
     cell.appendChild(statusLabel);
 
-    if (!isWeekend) {
+    if (!isLocked) {
       cell.addEventListener("click", () => {
         const nextStatus = getNextStatus(getDayStatus(dateKey));
         state.days[dateKey] = nextStatus;
@@ -262,6 +271,7 @@ function renderCalendar(year, monthIndex) {
 }
 
 function renderWeeklyTotals(year, monthIndex) {
+  ensureWeeklyPaid();
   const weeks = buildWeeks(year, monthIndex);
   const monthStats = computeMonthStats(year, monthIndex, weeks.length);
 
@@ -270,6 +280,8 @@ function renderWeeklyTotals(year, monthIndex) {
   weeks.forEach((week) => {
     const missedDays = Math.max(0, week.expectedDays - week.workedDays);
     const netSavings = week.savings - monthStats.billsPerDay * missedDays;
+    const weekKey = toDateKey(week.start);
+    const isPaid = Boolean(state.weeklyPaid?.[weekKey]);
 
     const row = document.createElement("div");
     row.className = "weekly-row";
@@ -296,12 +308,26 @@ function renderWeeklyTotals(year, monthIndex) {
     netSpan.className = "weekly-net";
     netSpan.textContent = `Net ${currency.format(netSavings)}`;
 
+    const paidToggle = document.createElement("button");
+    paidToggle.type = "button";
+    paidToggle.className = `weekly-paid-toggle${isPaid ? " is-paid" : ""}`;
+    paidToggle.textContent = isPaid ? "Paid" : "Not paid";
+    paidToggle.addEventListener("click", () => {
+      const next = !state.weeklyPaid[weekKey];
+      state.weeklyPaid[weekKey] = next;
+      saveState();
+      paidToggle.classList.toggle("is-paid", next);
+      paidToggle.textContent = next ? "Paid" : "Not paid";
+      renderOwedSummary();
+    });
+
     row.appendChild(label);
     row.appendChild(days);
     row.appendChild(savingsTotal);
     row.appendChild(savings);
     row.appendChild(daily);
     row.appendChild(netSpan);
+    row.appendChild(paidToggle);
 
     weeklyList.appendChild(row);
   });
@@ -353,6 +379,159 @@ function renderSummaries(year, monthIndex) {
   adjustmentTotal.textContent = currency.format(getLatestAdjustmentAmount());
 }
 
+function renderOwedSummary() {
+  if (!owedTotal) {
+    return;
+  }
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonthIndex = today.getMonth();
+  const nextFriday = getNextFriday(new Date());
+  const owed = computeOwedForRecentMonths(currentYear, currentMonthIndex, 1, 1, nextFriday);
+  owedTotal.textContent = currency.format(owed);
+  if (owedLabel) {
+    const formatted = nextFriday.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+    owedLabel.textContent = `Unpaid due by next Friday (${formatted})`;
+  }
+  renderOwedWeeksList(currentYear, currentMonthIndex, nextFriday);
+}
+
+function computeOwedForRecentMonths(year, monthIndex, monthsBack, arrearsMonths = 0, referenceDate) {
+  ensureWeeklyPaid();
+  const weekKeys = new Set();
+  const nextFriday = getNextFriday(referenceDate || new Date());
+  let total = 0;
+  for (let offset = arrearsMonths; offset <= monthsBack + arrearsMonths; offset += 1) {
+    const target = shiftMonth(year, monthIndex, -offset);
+    const weeks = buildWeeks(target.year, target.monthIndex);
+    weeks.forEach((week) => {
+      const weekKey = toDateKey(week.start);
+      if (weekKeys.has(weekKey)) {
+        return;
+      }
+      weekKeys.add(weekKey);
+      if (week.workedDays <= 0) {
+        return;
+      }
+      if (state.weeklyPaid?.[weekKey]) {
+        return;
+      }
+      const payDate = getWeekPayDate(week.start);
+      const dueDate = addMonths(payDate, PAY_ARREARS_MONTHS);
+      if (dueDate > nextFriday) {
+        return;
+      }
+      if (!isOnOrAfterCutoff(week.end, UNPAID_CUTOFF_DATE)) {
+        return;
+      }
+      total += week.savings;
+    });
+  }
+  return total;
+}
+
+function renderOwedWeeksList(year, monthIndex, cutoffDate) {
+  if (!owedWeeks) {
+    return;
+  }
+  const weeks = getUnpaidWeeksForRecentMonths(year, monthIndex, 1, 1, cutoffDate);
+  owedWeeks.innerHTML = "";
+  if (!weeks.length) {
+    const empty = document.createElement("div");
+    empty.className = "owed-weeks-item";
+    empty.textContent = "No unpaid weeks";
+    owedWeeks.appendChild(empty);
+    return;
+  }
+  weeks.forEach((week) => {
+    const item = document.createElement("div");
+    item.className = "owed-weeks-item";
+
+    const label = document.createElement("span");
+    label.textContent = `${formatShortDate(week.start)} - ${formatShortDate(week.end)}`;
+
+    const amount = document.createElement("strong");
+    amount.textContent = currency.format(week.amount);
+
+    item.appendChild(label);
+    item.appendChild(amount);
+    owedWeeks.appendChild(item);
+  });
+}
+
+function getUnpaidWeeksForRecentMonths(year, monthIndex, monthsBack, arrearsMonths = 0, referenceDate) {
+  ensureWeeklyPaid();
+  const weekKeys = new Set();
+  const nextFriday = getNextFriday(referenceDate || new Date());
+  const matches = [];
+  for (let offset = arrearsMonths; offset <= monthsBack + arrearsMonths; offset += 1) {
+    const target = shiftMonth(year, monthIndex, -offset);
+    const weeks = buildWeeks(target.year, target.monthIndex);
+    weeks.forEach((week) => {
+      const weekKey = toDateKey(week.start);
+      if (weekKeys.has(weekKey)) {
+        return;
+      }
+      weekKeys.add(weekKey);
+      if (week.workedDays <= 0) {
+        return;
+      }
+      if (state.weeklyPaid?.[weekKey]) {
+        return;
+      }
+      const payDate = getWeekPayDate(week.start);
+      const dueDate = addMonths(payDate, PAY_ARREARS_MONTHS);
+      if (dueDate > nextFriday) {
+        return;
+      }
+      if (!isOnOrAfterCutoff(week.end, UNPAID_CUTOFF_DATE)) {
+        return;
+      }
+      matches.push({ start: week.start, end: week.end, amount: week.savings });
+    });
+  }
+  return matches;
+}
+
+function getNextFriday(date) {
+  const copy = new Date(date);
+  const day = copy.getDay();
+  const daysUntilFriday = (5 - day + 7) % 7;
+  copy.setDate(copy.getDate() + daysUntilFriday);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function getWeekPayDate(weekStart) {
+  const payDate = new Date(weekStart);
+  payDate.setDate(payDate.getDate() + 4);
+  payDate.setHours(0, 0, 0, 0);
+  return payDate;
+}
+
+function addMonths(date, months) {
+  const copy = new Date(date);
+  const day = copy.getDate();
+  copy.setDate(1);
+  copy.setMonth(copy.getMonth() + months);
+  const daysInMonth = new Date(copy.getFullYear(), copy.getMonth() + 1, 0).getDate();
+  copy.setDate(Math.min(day, daysInMonth));
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function isOnOrAfterCutoff(date, cutoff) {
+  const compare = new Date(date);
+  compare.setHours(0, 0, 0, 0);
+  const limit = new Date(cutoff);
+  limit.setHours(0, 0, 0, 0);
+  return compare >= limit;
+}
+
 function renderMonthlyOutlook(year, monthIndex) {
   const pastMonths = [];
   for (let offset = 3; offset >= 1; offset -= 1) {
@@ -379,13 +558,15 @@ function renderMonthlyOutlook(year, monthIndex) {
     const savings = workedDays * (state.savingsPerDay || 0);
     const billsPerDay = expectedDays ? (state.monthlyBills || 0) / expectedDays : 0;
     const missedDays = Math.max(0, expectedDays - workedDays);
-    const netForMonth = savings - billsPerDay * missedDays;
+    const billsShortfall = billsPerDay * missedDays;
+    const netForMonth = savings - billsShortfall;
     const deductions = getDeductionsForMonth(month.year, month.monthIndex);
-    runningTotal += netForMonth;
-    runningTotal = applyAdjustmentForMonth(runningTotal, month.year, month.monthIndex);
-    if (deductions) {
-      runningTotal -= deductions;
-    }
+    const startBalance = runningTotal;
+    const afterNet = startBalance + netForMonth;
+    const adjustment = getLatestAdjustmentForMonth(month.year, month.monthIndex);
+    const afterAdjustment = adjustment ? Number(adjustment.amount) || 0 : afterNet;
+    const finalBalance = afterAdjustment - deductions;
+    runningTotal = finalBalance;
     const totalForMonth = netForMonth;
 
     const row = document.createElement("div");
@@ -406,14 +587,67 @@ function renderMonthlyOutlook(year, monthIndex) {
 
     const accumulated = document.createElement("span");
     accumulated.className = "monthly-accumulated";
-    accumulated.textContent = `Balance ${currency.format(runningTotal)}`;
+    accumulated.textContent = `Balance ${currency.format(finalBalance)}`;
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "monthly-toggle";
+    toggle.textContent = ">";
+    const breakdownId = `monthly-breakdown-${month.year}-${String(month.monthIndex + 1).padStart(2, "0")}`;
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-controls", breakdownId);
+    toggle.setAttribute("aria-label", `Show balance breakdown for ${month.label}`);
 
     row.appendChild(label);
     row.appendChild(days);
     row.appendChild(total);
     row.appendChild(accumulated);
+    row.appendChild(toggle);
 
     monthlyList.appendChild(row);
+
+    const breakdown = document.createElement("div");
+    breakdown.className = "monthly-breakdown";
+    breakdown.id = breakdownId;
+
+    const breakdownItems = [
+      { label: "Start balance", value: currency.format(startBalance) },
+      { label: "Worked income", value: currency.format(savings) },
+      { label: "Bills shortfall", value: currency.format(-billsShortfall) },
+      { label: "Net savings", value: currency.format(netForMonth) },
+      {
+        label: adjustment
+          ? `Adjustment set (${formatShortDate(adjustment.date)})`
+          : "Adjustment",
+        value: adjustment ? currency.format(Number(adjustment.amount) || 0) : "None",
+      },
+      { label: "Deductions", value: currency.format(-deductions) },
+      { label: "End balance", value: currency.format(finalBalance) },
+    ];
+
+    breakdownItems.forEach((item) => {
+      const entry = document.createElement("div");
+      entry.className = "monthly-breakdown-item";
+
+      const entryLabel = document.createElement("span");
+      entryLabel.textContent = item.label;
+
+      const entryValue = document.createElement("strong");
+      entryValue.textContent = item.value;
+
+      entry.appendChild(entryLabel);
+      entry.appendChild(entryValue);
+      breakdown.appendChild(entry);
+    });
+
+    toggle.addEventListener("click", () => {
+      const isOpen = breakdown.classList.toggle("open");
+      toggle.textContent = isOpen ? "v" : ">";
+      toggle.classList.toggle("open", isOpen);
+      toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    });
+
+    monthlyList.appendChild(breakdown);
   });
 }
 
@@ -514,7 +748,10 @@ function getNextStatus(current) {
   return STATUS_CYCLE[nextIndex];
 }
 
-function getStatusLabel(status, compact) {
+function getStatusLabel(status, compact, isBankHoliday) {
+  if (isBankHoliday) {
+    return "BANK";
+  }
   if (!compact) {
     return status === "off" ? "off" : status;
   }
@@ -528,10 +765,17 @@ function getStatusLabel(status, compact) {
 }
 
 function getDayStatus(dateKey) {
+  if (isBankHolidayDate(dateKey)) {
+    return "holiday";
+  }
   if (dateKey in state.days) {
     return state.days[dateKey];
   }
-  return BANK_HOLIDAYS.has(dateKey) ? "holiday" : "off";
+  return "off";
+}
+
+function isBankHolidayDate(dateKey) {
+  return BANK_HOLIDAYS.has(dateKey);
 }
 
 function parseMonth(value) {
@@ -640,6 +884,7 @@ function loadState() {
       spendingItems: stored?.spendingItems ?? null,
       spendingToDate: stored?.spendingToDate ?? 0,
       adjustments: stored?.adjustments ?? null,
+      weeklyPaid: stored?.weeklyPaid ?? {},
       holidayPaid: stored?.holidayPaid ?? false,
       days: stored?.days ?? {},
       selectedMonth: stored?.selectedMonth,
@@ -651,6 +896,7 @@ function loadState() {
       spendingItems: null,
       spendingToDate: 0,
       adjustments: null,
+      weeklyPaid: {},
       holidayPaid: false,
       days: {},
       selectedMonth: null,
@@ -809,6 +1055,13 @@ function ensureSpendingItems() {
   const legacyValue = Number(state.spendingToDate || 0);
   state.spendingItems = [{ amount: legacyValue, note: "", date: defaultDate }];
   saveState();
+}
+
+function ensureWeeklyPaid() {
+  if (!state.weeklyPaid || typeof state.weeklyPaid !== "object") {
+    state.weeklyPaid = {};
+    saveState();
+  }
 }
 
 function normalizeSpendingItem(item, defaultDate) {
@@ -1051,6 +1304,26 @@ function getLatestAdjustmentAmount() {
   return latest ? Number(latest.amount) || 0 : 0;
 }
 
+function getLatestAdjustmentForMonth(year, monthIndex) {
+  ensureAdjustments();
+  let latest = null;
+  state.adjustments.forEach((item) => {
+    if (!item?.date) {
+      return;
+    }
+    const date = new Date(item.date);
+    if (Number.isNaN(date.getTime())) {
+      return;
+    }
+    if (date.getFullYear() === year && date.getMonth() === monthIndex) {
+      if (!latest || date > latest.date) {
+        latest = { date, amount: item.amount };
+      }
+    }
+  });
+  return latest;
+}
+
 function getLatestAdjustmentOverall() {
   ensureAdjustments();
   let latest = null;
@@ -1070,22 +1343,7 @@ function getLatestAdjustmentOverall() {
 }
 
 function applyAdjustmentForMonth(currentTotal, year, monthIndex) {
-  ensureAdjustments();
-  let latest = null;
-  state.adjustments.forEach((item) => {
-    if (!item?.date) {
-      return;
-    }
-    const date = new Date(item.date);
-    if (Number.isNaN(date.getTime())) {
-      return;
-    }
-    if (date.getFullYear() === year && date.getMonth() === monthIndex) {
-      if (!latest || date > latest.date) {
-        latest = { date, amount: item.amount };
-      }
-    }
-  });
+  const latest = getLatestAdjustmentForMonth(year, monthIndex);
   if (!latest) {
     return currentTotal;
   }
